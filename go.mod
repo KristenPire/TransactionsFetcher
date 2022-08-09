@@ -1,4 +1,4 @@
-module TransactionsFetcher
+module github.com/KristenPire/TransactionsFetcher
 
 go 1.18
 
