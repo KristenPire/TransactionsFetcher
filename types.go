@@ -9,6 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
+const (
+	EmptyAddress = "0x0000000000000000000000000000000000000000"
+)
+
 type TransactionsFetcher interface {
 	FetchAll() ([]*Transaction, error)
 	Fetch(Query) ([]*Transaction, error)

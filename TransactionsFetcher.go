@@ -136,16 +136,21 @@ func (tf *transactionsFetcher) fetchTransferTransactions(limit uint64) error {
 
 func (tf *transactionsFetcher) toTransaction(tx *types.Transaction) *Transaction {
 	raw, _ := tx.MarshalJSON() // Don't let it like this
-	//	e18 := big.NewInt(int64(10000000000000000))
+	kind  := "transfer"
+	if tf.transferLogs[tx.Hash()].To.Hex() == EmptyAddress {
+		kind = "burn"
+	} else if tf.transferLogs[tx.Hash()].From.Hex() == EmptyAddress {
+		kind = "mint"
+	}
+
 	return &Transaction{
 		Id:           tx.Hash(),
 		TxHash:       tx.Hash(),
 		TokenAddress: tf.contract,
 		ToAddress:    tf.transferLogs[tx.Hash()].To,
 		FromAddress:  tf.transferLogs[tx.Hash()].From,
-		Kind:         "transfer",
+		Kind:         kind,
 		Amount:       tf.transferLogs[tx.Hash()].Tokens.String(),
-		//	Amount: new(big.Int).Div(tf.transferLogs[tx.Hash()].Tokens, e18).String(),
 		Currency: "EURE",
 		Raw:      string(raw),
 	}
