@@ -1,4 +1,4 @@
-package handlers
+package TransactionsFetcher
 
 import (
 	"math/big"
@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"TransactionsFetcher"
 )
 
 type TransferHandler struct {
@@ -30,7 +29,7 @@ type TransferTransaction struct {
 }
 
 // ToTransaction ...
-func (th TransferHandler) ToTransaction(tf TransactionsFetcher.TransactionsFetcher, transaction *types.Transaction) interface{} {
+func (th TransferHandler) ToTransaction(tf TransactionsFetcher, transaction *types.Transaction) interface{} {
 	event, err := tf.Event(transaction.Hash())
 	if err != nil {
 		return nil
@@ -41,9 +40,9 @@ func (th TransferHandler) ToTransaction(tf TransactionsFetcher.TransactionsFetch
 	}
 	raw, _ := transaction.MarshalJSON()
 	kind := "transfer"
-	if e.To.Hex() == TransactionsFetcher.EmptyAddress {
+	if e.To.Hex() == EmptyAddress {
 		kind = "burn"
-	} else if e.From.Hex() == TransactionsFetcher.EmptyAddress {
+	} else if e.From.Hex() == EmptyAddress {
 		kind = "mint"
 	}
 
@@ -61,7 +60,7 @@ func (th TransferHandler) ToTransaction(tf TransactionsFetcher.TransactionsFetch
 }
 
 // ToEvent ...
-func (th TransferHandler) ToEvent(tf TransactionsFetcher.TransactionsFetcher, log *types.Log) (interface{}, error) {
+func (th TransferHandler) ToEvent(tf TransactionsFetcher, log *types.Log) (interface{}, error) {
 	_, topicName := th.Topic()
 	var event TransferHandler
 
