@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -14,7 +15,7 @@ import (
 )
 
 // New ...
-func New(client *ethclient.Client, contract common.Address, contractABI string) (TransactionsFetcher, error) {
+func New(client *ethclient.Client, contract common.Address, contractABI string, handler TransactionsFetcherHandler) (TransactionsFetcher, error) {
 	ca, err := abi.JSON(strings.NewReader(contractABI))
 	if err != nil {
 		return nil, err
@@ -23,33 +24,15 @@ func New(client *ethclient.Client, contract common.Address, contractABI string) 
 		client:       client,
 		contract:     contract,
 		contractABI:  ca,
-		transferLogs: make(map[common.Hash]LogTransfer),
+		handler:      handler,
+		eventLogs:    make(map[common.Hash]interface{}),
 	}, nil
 }
 
-// FetchAll ...
-func (tf *transactionsFetcher) FetchAll() ([]*Transaction, error) {
-	lastBlockNumber, err := tf.getLastBlockNumber()
-	if err != nil {
-		return nil, err
-	}
-	if err := tf.newQuery(big.NewInt(0), lastBlockNumber); err != nil {
-		fmt.Println("Query issue")
-		return nil, err
-	}
-	if err := tf.fetchTranferLogs(common.Address{}, false); err != nil {
-		fmt.Println("error in fetchTransferLogs")
-		return nil, err
-	}
-	if err := tf.fetchTransferTransactions(0); err != nil {
-		fmt.Println("error in fetchTransferTransactions")
-		return nil, err
-	}
-	return tf.transferTxs, nil
-}
-
+// PUBLIC
 // Fetch ...
-func (tf *transactionsFetcher) Fetch(q Query) ([]*Transaction, error) {
+func (tf *transactionsFetcher) Fetch(q Query) ([]interface{}, error) {
+	t := time.Now()
 	if err := tf.validateQuery(&q); err != nil {
 		return nil, err
 	}
@@ -57,17 +40,48 @@ func (tf *transactionsFetcher) Fetch(q Query) ([]*Transaction, error) {
 		fmt.Println("Query issue")
 		return nil, err
 	}
-	if err := tf.fetchTranferLogs(q.Target, true); err != nil {
-		fmt.Println("error in fetchTransferLogs")
+	fmt.Println("time for newQuery %s", time.Since(t))
+	if err := tf.fetchLogs(q.Target, true); err != nil {
+		fmt.Println("error in fetchLogs")
 		return nil, err
 	}
-	if err := tf.fetchTransferTransactions(q.Limit); err != nil {
+	fmt.Println("time for fetchTransferLogs %s", time.Since(t))
+	if err := tf.fetchTransactions(q.Limit); err != nil {
 		fmt.Println("error in fetchTransferTransactions")
 		return nil, err
 	}
-	return tf.transferTxs, nil
+	fmt.Println("time for fetchTranferTransactions %s", time.Since(t))
+	return tf.transactions, nil
 }
 
+// Event ...
+func (tf *transactionsFetcher) Event(id common.Hash) (interface{}, error) {
+	event, ok := tf.eventLogs[id]
+	if !ok {
+		return nil, fmt.Errorf("Error: id (%s) not found", id.Hex())
+	}
+	return event, nil
+}
+
+// Contract
+func (tf transactionsFetcher) Contract() common.Address {
+	return tf.contract
+}
+
+// Unpack
+func (tf *transactionsFetcher) Unpack(event interface{}, topicName string, log *types.Log) error {
+	return tf.contractABI.UnpackIntoInterface(event, topicName, log.Data)
+}
+
+// PRIVATE
+// getLastBlockNumber ...
+func (tf transactionsFetcher) getLastBlockNumber() (*big.Int, error) {
+	header, err := tf.client.HeaderByNumber(context.Background(), nil)
+	if err != nil {
+		return nil, err
+	}
+	return header.Number, nil
+}
 // validateQuery ...
 func (tf transactionsFetcher) validateQuery(q *Query) error {
 	if q.FromBlock == nil {
@@ -82,8 +96,29 @@ func (tf transactionsFetcher) validateQuery(q *Query) error {
 	}
 	return nil
 }
-
-func (tf *transactionsFetcher) newQuery(from *big.Int, to *big.Int) error {
+// newQuerySafe ...
+func (tf *transactionsFetcher) newQuerySafe(from *big.Int, to *big.Int) error {
+	head := new(big.Int).Set(from)
+	limit := new(big.Int).Set(to)
+	limit.Sub(limit, big.NewInt(BlockRangeMax-1))
+	for {
+		head.Add(head, big.NewInt(BlockRangeMax-1))
+		logs, err := tf.query(from, head)
+		if err != nil {
+			return err
+		}
+		tf.logs = append(tf.logs, logs...)
+		from.Add(from, big.NewInt(BlockRangeMax-1))
+		if head.Cmp(to) >= 0 {
+			break
+		} else if from.Cmp(limit) == 1 {
+			head = limit
+		}
+	}
+	return nil
+}
+// query ...
+func (tf *transactionsFetcher) query(from *big.Int, to *big.Int) ([]types.Log, error) {
 	query := ethereum.FilterQuery{
 		FromBlock: from,
 		ToBlock:   to,
@@ -91,79 +126,48 @@ func (tf *transactionsFetcher) newQuery(from *big.Int, to *big.Int) error {
 			tf.contract,
 		},
 	}
+	return tf.client.FilterLogs(context.Background(), query)
+}
+// newQuery ...
+func (tf *transactionsFetcher) newQuery(from *big.Int, to *big.Int) error {
 	var err error
-	tf.logs, err = tf.client.FilterLogs(context.Background(), query)
+	tf.logs, err = tf.query(from, to)
+	if err != nil && strings.Contains(err.Error(), "eth_getLogs block range too large") {
+		return tf.newQuerySafe(from, to)
+	}
 	return err
 }
-
-func (tf *transactionsFetcher) fetchTranferLogs(target common.Address, withTarget bool) error {
-	topicSignature, topicName := ERC20.Transfer()
+// fetchLogs ...
+func (tf *transactionsFetcher) fetchLogs(target common.Address, withTarget bool) error {
+	sig, _ := tf.handler.Topic()
 	for _, vLog := range tf.logs {
 		switch vLog.Topics[0].Hex() {
-		case topicSignature:
-			//Topic specific code
-			var transferEvent LogTransfer
-			if err := tf.contractABI.UnpackIntoInterface(&transferEvent, topicName, vLog.Data); err != nil {
+		case sig:
+			event, err := tf.handler.ToEvent(tf, &vLog)
+			if err != nil {
 				return err
 			}
-			transferEvent.From = common.HexToAddress(vLog.Topics[1].Hex())
-			transferEvent.To = common.HexToAddress(vLog.Topics[2].Hex())
-			//End of Topic specific code
-			if withTarget && tf.isRelated(transferEvent, target) == false {
+			if (withTarget && tf.handler.IsRelated(event, target) == false) || event == nil {
 				continue
 			}
-			tf.transferLogs[vLog.TxHash] = transferEvent
+			tf.eventLogs[vLog.TxHash] = event
 		}
 	}
 	return nil
 }
-
-func (tf *transactionsFetcher) fetchTransferTransactions(limit uint64) error {
+// fetchTransactions ...
+func (tf *transactionsFetcher) fetchTransactions(limit uint64) error {
 	fetched := uint64(0)
-	for txID, _ := range tf.transferLogs {
+	for txID, _ := range tf.eventLogs {
 		tx, _, err := tf.client.TransactionByHash(context.Background(), txID)
 		if err != nil {
 			return err
 		}
-		tf.transferTxs = append(tf.transferTxs, tf.toTransaction(tx))
+		tf.transactions = append(tf.transactions, tf.handler.ToTransaction(tf, tx))
 		fetched++
 		if limit > 0 && fetched >= limit {
 			return nil
 		}
 	}
 	return nil
-}
-
-func (tf *transactionsFetcher) toTransaction(tx *types.Transaction) *Transaction {
-	raw, _ := tx.MarshalJSON() // Don't let it like this
-	kind  := "transfer"
-	if tf.transferLogs[tx.Hash()].To.Hex() == EmptyAddress {
-		kind = "burn"
-	} else if tf.transferLogs[tx.Hash()].From.Hex() == EmptyAddress {
-		kind = "mint"
-	}
-
-	return &Transaction{
-		Id:           tx.Hash(),
-		TxHash:       tx.Hash(),
-		TokenAddress: tf.contract,
-		ToAddress:    tf.transferLogs[tx.Hash()].To,
-		FromAddress:  tf.transferLogs[tx.Hash()].From,
-		Kind:         kind,
-		Amount:       tf.transferLogs[tx.Hash()].Tokens.String(),
-		Currency: "EURE",
-		Raw:      string(raw),
-	}
-}
-
-func (tf transactionsFetcher) isRelated(te LogTransfer, t common.Address) bool {
-	return te.From == t || te.To == t
-}
-
-func (tf transactionsFetcher) getLastBlockNumber() (*big.Int, error) {
-	header, err := tf.client.HeaderByNumber(context.Background(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return header.Number, nil
 }

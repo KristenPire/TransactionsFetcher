@@ -10,12 +10,22 @@ import (
 )
 
 const (
-	EmptyAddress = "0x0000000000000000000000000000000000000000"
+	EmptyAddress  = "0x0000000000000000000000000000000000000000"
+	BlockRangeMax = 3500
 )
 
 type TransactionsFetcher interface {
-	FetchAll() ([]*Transaction, error)
-	Fetch(Query) ([]*Transaction, error)
+	Fetch(Query) ([]interface{}, error)
+	Unpack(event interface{}, topicName string, log *types.Log) error
+	Event(Id common.Hash) (interface{}, error)
+	Contract() common.Address
+}
+
+type TransactionsFetcherHandler interface {
+	ToTransaction(TransactionsFetcher, *types.Transaction) interface{}
+	ToEvent(TransactionsFetcher, *types.Log) (interface{}, error)
+	IsRelated(event interface{}, target common.Address) bool
+	Topic() (string, string)
 }
 
 type Query struct {
@@ -28,7 +38,7 @@ type Query struct {
 type LogTransfer struct {
 	From   common.Address
 	To     common.Address
-	Tokens *big.Int
+	Amount *big.Int
 }
 
 type Transaction struct {
@@ -51,8 +61,9 @@ type transactionsFetcher struct {
 	contract    common.Address
 	target      common.Address
 	contractABI abi.ABI
+	handler     TransactionsFetcherHandler
 
 	logs         []types.Log
-	transferLogs map[common.Hash]LogTransfer
-	transferTxs  []*Transaction
+	eventLogs    map[common.Hash]interface{}
+	transactions []interface{}
 }
