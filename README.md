@@ -23,16 +23,14 @@
     <img src="images/logo.png" alt="Logo" width="80" height="80">
   </a>
 
-<h3 align="center">project_title</h3>
+<h3 align="center">Transactions Fetcher</h3>
 
   <p align="center">
-    project_description
+    Fetch transactions from any EVM smart-contract.
     <br />
     <a href="https://github.com/KristenPire/TransactionsFetcher"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/KristenPire/TransactionsFetcher">View Demo</a>
-    ·
     <a href="https://github.com/KristenPire/TransactionsFetcher/issues">Report Bug</a>
     ·
     <a href="https://github.com/KristenPire/TransactionsFetcher/issues">Request Feature</a>
@@ -72,46 +70,28 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
-
-Here's a blank template to get started: To avoid retyping too much info. Do a search and replace with your text editor for the following: `KristenPire`, `TransactionsFetcher`, `twitter_handle`, `linkedin_username`, `email_client`, `email`, `project_title`, `project_description`
-
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 ### Built With
 
-* [![Next][Next.js]][Next-url]
-* [![React][React.js]][React-url]
-* [![Vue][Vue.js]][Vue-url]
-* [![Angular][Angular.io]][Angular-url]
-* [![Svelte][Svelte.dev]][Svelte-url]
-* [![Laravel][Laravel.com]][Laravel-url]
-* [![Bootstrap][Bootstrap.com]][Bootstrap-url]
-* [![JQuery][JQuery.com]][JQuery-url]
+* [![Go][Golang]][Golang-url]
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 <!-- GETTING STARTED -->
 ## Getting Started
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
-
 ### Prerequisites
 
 This is an example of how to list things you need to use the software and how to install them.
-* npm
+* go
   ```sh
-  npm install npm@latest -g
+  go get github.com/KristenPire/TransactionsFetcher
   ```
 
-### Installation
+### implementation
 
-1. Get a free API Key at [https://example.com](https://example.com)
+1. Create a TransactionFetcher Handler
 2. Clone the repo
    ```sh
    git clone https://github.com/KristenPire/TransactionsFetcher.git
@@ -218,3 +198,5 @@ Project Link: [https://github.com/KristenPire/TransactionsFetcher](https://githu
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://linkedin.com/in/kristen-pire
 [product-screenshot]: images/screenshot.png
+[golang]: https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white
+[golang-url]: https://go.dev/
